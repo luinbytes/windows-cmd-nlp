@@ -1,0 +1,10 @@
+# Windows CMD NLP Parser - Python Requirements
+
+# No external dependencies required for basic functionality
+# Python 3.7+ standard library only
+
+# Optional: For future enhancements
+# openai>=1.0.0  # For LLM-based command understanding
+# azure-cognitiveservices-language-luis>=0.2.0  # For Microsoft LUIS
+# speechrecognition>=3.8.1  # For voice input
+# pyttsx3>=2.90  # For voice output

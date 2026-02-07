@@ -185,6 +185,114 @@ class CMDNLPParser:
             ),
         ])
 
+        # Process management
+        self.patterns.extend([
+            # "show running processes"
+            CommandPattern(
+                r"show (?:running )?process(?:es)?",
+                lambda m: "tasklist",
+                "List running processes",
+                safe=True
+            ),
+            # "kill process [name]"
+            CommandPattern(
+                r"kill (?:process )?(.+)",
+                lambda m: f"taskkill /F /IM \"{m.group(1).strip()}\"",
+                "Kill process",
+                safe=False  # Destructive
+            ),
+        ])
+
+        # Environment variables
+        self.patterns.extend([
+            # "set variable [name] to [value]"
+            CommandPattern(
+                r"set (?:variable )?(.+) (?:to|equal|=) (.+)",
+                lambda m: f"set {m.group(1).strip()}={m.group(2).strip()}",
+                "Set environment variable",
+                safe=True
+            ),
+        ])
+
+        # Network utilities
+        self.patterns.extend([
+            # "ping [host]"
+            CommandPattern(
+                r"ping (.+)",
+                lambda m: f"ping {m.group(1).strip()}",
+                "Ping host",
+                safe=True
+            ),
+            # "trace route to [host]"
+            CommandPattern(
+                r"trace route to (.+)",
+                lambda m: f"tracert {m.group(1).strip()}",
+                "Trace route",
+                safe=True
+            ),
+        ])
+
+        # File properties (more specific than "show variable", must come first)
+        self.patterns.extend([
+            # "show hidden files" (specific, must come before "show variable")
+            CommandPattern(
+                r"show hidden files",
+                lambda m: "dir /ah",
+                "List hidden files",
+                safe=True
+            ),
+            # "show file attributes [name]"
+            CommandPattern(
+                r"show (?:file )?(?:attributes|props|properties) (.+)",
+                lambda m: f"attrib {m.group(1).strip()}",
+                "Show file attributes",
+                safe=True
+            ),
+            # "hide file [name]"
+            CommandPattern(
+                r"hide (?:file )?(.+)",
+                lambda m: f"attrib +h {m.group(1).strip()}",
+                "Hide file",
+                safe=True
+            ),
+        ])
+
+        # Environment variables (must come before general "show" patterns)
+        self.patterns.extend([
+            # "set variable [name] to [value]"
+            CommandPattern(
+                r"set (?:variable )?(.+) (?:to|equal|=) (.+)",
+                lambda m: f"set {m.group(1).strip()}={m.group(2).strip()}",
+                "Set environment variable",
+                safe=True
+            ),
+            # "show variable [name]" - requires "variable" keyword
+            CommandPattern(
+                r"show variable (.+)",
+                lambda m: f"echo %{m.group(1).strip()}%",
+                "Show environment variable",
+                safe=True
+            ),
+        ])
+
+        # Text file operations (broad patterns that need specific ones first)
+        self.patterns.extend([
+            # "show file [name]" or "read file [name]"
+            CommandPattern(
+                r"(?:show|read|display|cat) (?:file )?(.+)",
+                lambda m: f"type {m.group(1).strip()}",
+                "Display file contents",
+                safe=True
+            ),
+            # "edit file [name]"
+            CommandPattern(
+                r"(?:edit|open) (?:file )?(.+)",
+                lambda m: f"notepad {m.group(1).strip()}",
+                "Edit file",
+                safe=True
+            ),
+        ])
+
         # Shortcuts/aliases
         self.patterns.extend([
             CommandPattern(r"ls", lambda m: "dir", "List files (alias)", safe=True),

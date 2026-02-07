@@ -1,84 +1,88 @@
 # Windows CMD NLP Parser
 
-Natural language interface for Windows Command Prompt. Type like a human, get commands executed.
+Type naturally. Execute commands. No syntax memorization required.
 
-## Purpose
+## Quick Start
 
-Remove friction from Windows command-line usage by translating natural language into CMD commands. Perfect for quick tasks without memorizing syntax.
+### Installation
 
-## Features
+1. Download or clone this repository
+2. Double-click `install.bat` (or run as Administrator for system-wide install)
+3. Restart CMD
+4. Type: `nlp go to downloads`
 
-- **Natural patterns**: "go to downloads" → `cd Downloads`
-- **Extensible**: Add new command patterns easily
-- **Safe mode**: Confirmation for destructive operations
-- **Learning**: Logs patterns for future improvement
-- **Multi-step**: Handle compound commands
+### Usage
 
-## Usage
-
-```bash
-python cmd_nlp.py "go to downloads"
-python cmd_nlp.py "create folder my-project"
-python cmd_nlp.py "list files"
+```cmd
+nlp [natural language command]
 ```
 
-## Supported Patterns
+## Examples
 
-### Navigation
-- "go to [dir]" → `cd [dir]`
-- "go back" → `cd ..`
-- "show current directory" → `cd`
-- "show current path" → `cd`
+| Natural Language | CMD Command |
+|-----------------|-------------|
+| `nlp go to downloads` | `cd Downloads` |
+| `nlp go back` | `cd ..` |
+| `nlp list files` | `dir` |
+| `nlp create folder test` | `mkdir test` |
+| `nlp delete file readme.txt` | `del readme.txt` |
+| `nlp show ip address` | `ipconfig` |
+| `nlp clear screen` | `cls` |
+| `nlp open notepad` | `start notepad` |
 
-### File Operations
-- "list files" → `dir`
-- "list files sorted by size" → `dir /O-S`
-- "create folder [name]" → `mkdir [name]`
-- "delete file [name]" → `del [name]` (with confirmation)
-- "delete folder [name]" → `rmdir [name]` (with confirmation)
-
-### System
-- "open [program]" → `start [program]`
-- "clear" → `cls`
-- "show disk space" → `wmic logicaldisk get size,freespace,caption`
-- "show ip address" → `ipconfig`
-
-### Search
-- "find files containing [pattern]" → `dir /s /b | findstr [pattern]`
-- "find text [text] in files" → `findstr /s /i [text] *.*`
-
-## Architecture
+## How It Works
 
 ```
-cmd_nlp.py
-├── Command patterns (regex-based)
-├── Intent classifier
-├── Command generator
-├── Safety layer
-└── Execution/preview mode
+nlp [your command]
+    ↓
+nlp.bat (Windows wrapper)
+    ↓
+cmd_nlp.py (NLP parser)
+    ↓
+Execute CMD command
 ```
 
-## Safety Features
+## Files
 
-1. **Confirmation required**: Destructive commands need user approval
-2. **Dry-run mode**: Show command without executing
-3. **Pattern logging**: Learn from successful commands
-4. **Blacklist**: Block dangerous commands (format, shutdown, etc.)
+- `nlp.bat` — Windows command wrapper (what you type)
+- `cmd_nlp.py` — Natural language parser
+- `install.bat` — Installation script
+- `patterns/` — Command pattern definitions
 
-## Extending
+## Requirements
 
-Add new patterns in `PATTERNS` dict:
+- Windows 10/11
+- Python 3.8+ (must be in PATH)
+- CMD or PowerShell
 
-```python
-PATTERNS = {
-    r"my pattern (.+)": lambda match: f"cmd {match.group(1)}",
-}
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "nlp is not recognized" | Run `install.bat` and restart CMD |
+| "Python not found" | Install Python and add to PATH |
+| Command not understood | Check examples above for supported patterns |
+
+## Advanced
+
+### Dry Run Mode
+
+Preview what command would execute:
+
+```cmd
+set NLP_DRY_RUN=1
+nlp delete file important.txt
 ```
 
-## Future Improvements
+### Debug Mode
 
-- LLM-based understanding for complex queries
-- Command history and favorites
-- Alias system for frequent tasks
-- Integration with file explorer
-- Voice input support
+See pattern matching details:
+
+```cmd
+set NLP_DEBUG=1
+nlp find files containing password
+```
+
+## License
+
+MIT

@@ -33,6 +33,8 @@ def test_parser():
         ("show disk space", "wmic logicaldisk", "System: disk space"),
         ("show ip address", "ipconfig", "System: IP address"),
         ("show my ip", "ipconfig", "System: my IP"),
+        ("show date", "date /t", "System: show date"),
+        ("show time", "time /t", "System: show time"),
         ("find files containing config", "dir /s /b | findstr", "Search: find files"),
         ("find text error in files", "findstr /s /i", "Search: find text"),
         ("copy file1.txt to backup", 'copy "file1.txt" "backup"', "Files: copy"),

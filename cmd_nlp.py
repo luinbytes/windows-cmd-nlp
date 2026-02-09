@@ -193,6 +193,20 @@ class CMDNLPParser:
             safe=True,
             category="system"
         )
+        self._add_pattern(
+            r"show date",
+            lambda m: "date /t",
+            "Show current date",
+            safe=True,
+            category="system"
+        )
+        self._add_pattern(
+            r"show time",
+            lambda m: "time /t",
+            "Show current time",
+            safe=True,
+            category="system"
+        )
 
     def _setup_search_patterns(self) -> None:
         """Search operation command patterns"""
@@ -288,8 +302,9 @@ class CMDNLPParser:
 
     def _setup_text_file_patterns(self) -> None:
         """Text file operation patterns - broad patterns that need specific ones first"""
+        # Note: 'file' keyword is required to avoid matching other 'show' commands like 'show date'
         self._add_pattern(
-            r"(?:show|read|display|cat) (?:file )?(.+)",
+            r"(?:show|read|display|cat) file (.+)",
             lambda m: f"type {m.group(1).strip()}",
             "Display file contents",
             safe=True,

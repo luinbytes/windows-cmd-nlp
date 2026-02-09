@@ -30,12 +30,17 @@ class CommandPattern:
 class CMDNLPParser:
     """Natural language parser for Windows CMD commands"""
 
-    def __init__(self, log_file: str = "logs/command_history.jsonl", dry_run: bool = False, no_emoji: bool = False):
+    CONFIG_FILE = "cmd_nlp_config.json"
+
+    def __init__(self, log_file: str = "logs/command_history.jsonl", dry_run: bool = False, no_emoji: bool = False, config_file: Optional[str] = None):
         self.patterns: List[CommandPattern] = []
         self.log_file = log_file
         self.dry_run = dry_run
         self.no_emoji = no_emoji
+        self.config_file = config_file or self.CONFIG_FILE
+        self.custom_patterns: List[Dict[str, Any]] = []
         self._setup_patterns()
+        self._load_custom_patterns()
         self._setup_logging()
 
     def _add_pattern(self, pattern: str, generator: Callable, description: str, 
@@ -309,6 +314,59 @@ class CMDNLPParser:
         for pattern, generator, description, safe in aliases:
             self._add_pattern(pattern, generator, description, safe, category="alias")
 
+    def _load_custom_patterns(self) -> None:
+        """Load custom patterns from JSON configuration file"""
+        if not os.path.exists(self.config_file):
+            return
+
+        try:
+            with open(self.config_file, "r") as f:
+                config = json.load(f)
+
+            custom_patterns = config.get("patterns", [])
+            for p in custom_patterns:
+                try:
+                    pattern = p.get("pattern")
+                    command_template = p.get("command")
+                    description = p.get("description", "Custom pattern")
+                    safe = p.get("safe", True)
+                    category = p.get("category", "custom")
+
+                    if not pattern or not command_template:
+                        continue
+
+                    # Create generator that substitutes match groups
+                    def make_generator(template):
+                        return lambda m: self._substitute_groups(template, m)
+
+                    self._add_pattern(
+                        pattern,
+                        make_generator(command_template),
+                        description,
+                        safe,
+                        category
+                    )
+                    self.custom_patterns.append(p)
+                except Exception as e:
+                    if not self.no_emoji:
+                        print(f"⚠️  Warning: Failed to load custom pattern: {e}")
+
+        except json.JSONDecodeError as e:
+            if not self.no_emoji:
+                print(f"⚠️  Warning: Invalid JSON in config file: {e}")
+        except IOError as e:
+            if not self.no_emoji:
+                print(f"⚠️  Warning: Could not read config file: {e}")
+
+    def _substitute_groups(self, template: str, match) -> str:
+        """Substitute regex match groups into command template"""
+        result = template
+        for i in range(1, match.lastindex + 1 if match.lastindex else 1):
+            placeholder = f"{{{i}}}"
+            if placeholder in result:
+                result = result.replace(placeholder, match.group(i))
+        return result
+
     def _setup_logging(self) -> None:
         """Setup logging directory"""
         log_dir = os.path.dirname(self.log_file)
@@ -566,10 +624,11 @@ def main():
     parser.add_argument("--interactive", action="store_true", help="Start interactive mode")
     parser.add_argument("--no-emoji", action="store_true", help="Disable emoji output")
     parser.add_argument("--patterns", action="store_true", help="Show all available patterns")
+    parser.add_argument("--config", help="Path to custom patterns config file (JSON)")
 
     args = parser.parse_args()
 
-    cmd_nlp = CMDNLPParser(dry_run=args.dry_run, no_emoji=args.no_emoji)
+    cmd_nlp = CMDNLPParser(dry_run=args.dry_run, no_emoji=args.no_emoji, config_file=args.config)
 
     if args.stats:
         cmd_nlp.show_stats()

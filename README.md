@@ -246,8 +246,21 @@ ask --interactive
 
 ### CMD Batch File
 
-Create `nlp.bat`:
+The `nlp.bat` wrapper is included for easy Windows usage:
 
+```batch
+# Add to your PATH, then use anywhere:
+nlp "go to downloads"
+nlp --interactive
+nlp --stats
+```
+
+Or run directly:
+```batch
+C:\path\to\windows-cmd-nlp\nlp.bat "list files"
+```
+
+To create your own wrapper:
 ```batch
 @echo off
 python C:\path\to\windows-cmd-nlp\cmd_nlp.py %*

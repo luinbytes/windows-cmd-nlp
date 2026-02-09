@@ -1,0 +1,40 @@
+{
+  "description": "Custom command patterns for Windows CMD NLP Parser",
+  "patterns": [
+    {
+      "pattern": "git status",
+      "command": "git status",
+      "description": "Show git repository status",
+      "safe": true,
+      "category": "git"
+    },
+    {
+      "pattern": "git commit (.+)",
+      "command": "git commit -m \"{1}\"",
+      "description": "Commit with message",
+      "safe": true,
+      "category": "git"
+    },
+    {
+      "pattern": "restart computer",
+      "command": "shutdown /r /t 0",
+      "description": "Restart computer immediately",
+      "safe": false,
+      "category": "power"
+    },
+    {
+      "pattern": "show date",
+      "command": "date /t",
+      "description": "Show current date",
+      "safe": true,
+      "category": "system"
+    },
+    {
+      "pattern": "show time",
+      "command": "time /t",
+      "description": "Show current time",
+      "safe": true,
+      "category": "system"
+    }
+  ]
+}

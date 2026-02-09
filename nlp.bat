@@ -1,7 +1,8 @@
 @echo off
-REM Windows CMD NLP Parser Wrapper
-REM Usage: nlp [natural language command]
-REM Example: nlp go to downloads
+REM Windows CMD NLP Parser wrapper
+REM Usage: nlp "your command here"
+REM      nlp --interactive
+REM      nlp --help
 
 setlocal enabledelayedexpansion
 

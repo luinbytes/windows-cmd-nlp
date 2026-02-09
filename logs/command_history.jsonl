@@ -1,4 +1,0 @@
-{"timestamp": "2026-02-06T04:25:02.877394", "input": "go to downloads", "command": "cd Downloads", "pattern_description": "Change directory", "safe": true, "executed": false}
-{"timestamp": "2026-02-06T04:25:02.911894", "input": "create folder my-new-project", "command": "mkdir my-new-project", "pattern_description": "Create directory", "safe": true, "executed": false}
-{"timestamp": "2026-02-06T04:25:02.944981", "input": "list files sorted by size", "command": "dir /O-S", "pattern_description": "List files sorted", "safe": true, "executed": false}
-{"timestamp": "2026-02-06T04:25:02.978694", "input": "find files containing config", "command": "dir /s /b | findstr /i \"config\"", "pattern_description": "Find files by name", "safe": true, "executed": false}

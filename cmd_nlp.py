@@ -22,6 +22,23 @@ try:
 except ImportError:
     PROMPT_TOOLKIT_AVAILABLE = False
 
+# Try to import colorama for Windows color support
+try:
+    from colorama import init as colorama_init, Fore, Style
+    colorama_init()
+    COLORAMA_AVAILABLE = True
+except ImportError:
+    COLORAMA_AVAILABLE = False
+    # Dummy classes for when colorama is not available
+    class _DummyFore:
+        def __getattr__(self, name):
+            return ""
+    class _DummyStyle:
+        def __getattr__(self, name):
+            return ""
+    Fore = _DummyFore()
+    Style = _DummyStyle()
+
 
 class CommandPattern:
     """Represents a single command pattern with regex and generator"""
@@ -37,19 +54,160 @@ class CommandPattern:
         return self.pattern.match(text)
 
 
+class NLPError(Exception):
+    """Base exception for NLP parser errors"""
+    def __init__(self, message: str, suggestion: Optional[str] = None):
+        super().__init__(message)
+        self.message = message
+        self.suggestion = suggestion
+
+
+class ParseError(NLPError):
+    """Raised when input cannot be parsed"""
+    pass
+
+
+class ExecutionError(NLPError):
+    """Raised when command execution fails"""
+    pass
+
+
+class ConfigError(NLPError):
+    """Raised when there's a configuration error"""
+    pass
+
+
+class ErrorHandler:
+    """Handles errors with Windows-friendly messages"""
+    
+    def __init__(self, no_emoji: bool = False, debug: bool = False, log_file: str = "logs/error.log"):
+        self.no_emoji = no_emoji
+        self.debug = debug
+        self.log_file = log_file
+        self._ensure_log_dir()
+    
+    def _ensure_log_dir(self):
+        """Ensure log directory exists"""
+        log_dir = os.path.dirname(self.log_file)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+    
+    def _fmt(self, emoji: str, text: str) -> str:
+        """Format output with optional emoji"""
+        if self.no_emoji:
+            return text
+        return f"{emoji} {text}"
+    
+    def _color(self, text: str, color: str) -> str:
+        """Apply color to text if colorama is available"""
+        if not COLORAMA_AVAILABLE:
+            return text
+        color_map = {
+            "red": Fore.RED,
+            "yellow": Fore.YELLOW,
+            "green": Fore.GREEN,
+            "cyan": Fore.CYAN,
+            "white": Fore.WHITE,
+        }
+        reset = Style.RESET_ALL if COLORAMA_AVAILABLE else ""
+        return f"{color_map.get(color, '')}{text}{reset}"
+    
+    def log_error(self, error: Exception, context: Optional[str] = None):
+        """Log full error details to file"""
+        import traceback
+        timestamp = datetime.now(timezone.utc).isoformat()
+        with open(self.log_file, "a") as f:
+            f.write(f"[{timestamp}] Error: {error}\n")
+            if context:
+                f.write(f"  Context: {context}\n")
+            f.write(traceback.format_exc())
+            f.write("\n" + "="*50 + "\n")
+    
+    def handle(self, error: Exception, context: Optional[str] = None) -> str:
+        """Handle error and return user-friendly message"""
+        # Log full error
+        self.log_error(error, context)
+        
+        # In debug mode, show full traceback
+        if self.debug:
+            import traceback
+            return traceback.format_exc()
+        
+        # Return friendly message based on error type
+        if isinstance(error, ParseError):
+            return self._handle_parse_error(error)
+        elif isinstance(error, ExecutionError):
+            return self._handle_execution_error(error)
+        elif isinstance(error, ConfigError):
+            return self._handle_config_error(error)
+        elif isinstance(error, FileNotFoundError):
+            return self._handle_not_found_error(error)
+        elif isinstance(error, PermissionError):
+            return self._handle_permission_error(error)
+        else:
+            return self._handle_unknown_error(error)
+    
+    def _handle_parse_error(self, error: ParseError) -> str:
+        """Handle parsing errors"""
+        msg = self._color("I didn't understand that command.", "yellow")
+        if error.suggestion:
+            msg += f"\n{self._color('Hint:', 'cyan')} {error.suggestion}"
+        msg += f"\n{self._color('Try:', 'cyan')} nlp --patterns (to see available commands)"
+        return self._fmt("❓", msg) if not self.no_emoji else msg
+    
+    def _handle_execution_error(self, error: ExecutionError) -> str:
+        """Handle command execution errors"""
+        msg = self._color("Could not complete that command.", "red")
+        if error.message:
+            msg += f"\n  {error.message}"
+        if error.suggestion:
+            msg += f"\n{self._color('Suggestion:', 'cyan')} {error.suggestion}"
+        return self._fmt("❌", msg) if not self.no_emoji else msg
+    
+    def _handle_config_error(self, error: ConfigError) -> str:
+        """Handle configuration errors"""
+        msg = self._color("Configuration error.", "yellow")
+        msg += f"\n  {error.message}"
+        if error.suggestion:
+            msg += f"\n{self._color('Fix:', 'cyan')} {error.suggestion}"
+        return self._fmt("⚠️", msg) if not self.no_emoji else msg
+    
+    def _handle_not_found_error(self, error: FileNotFoundError) -> str:
+        """Handle file not found errors"""
+        msg = self._color("File or command not found.", "yellow")
+        msg += f"\n  {str(error)}"
+        return self._fmt("📁", msg) if not self.no_emoji else msg
+    
+    def _handle_permission_error(self, error: PermissionError) -> str:
+        """Handle permission errors"""
+        msg = self._color("Permission denied.", "red")
+        msg += f"\n  This command may require administrator privileges."
+        msg += f"\n{self._color('Try:', 'cyan')} Run Command Prompt as Administrator"
+        return self._fmt("🚫", msg) if not self.no_emoji else msg
+    
+    def _handle_unknown_error(self, error: Exception) -> str:
+        """Handle unknown errors"""
+        msg = self._color("Something went wrong.", "red")
+        if self.no_emoji:
+            return f"Error: {str(error)}\nUse --debug for more details."
+        return f"❌ {msg}\n  {str(error)}\n  Use --debug for full details."
+
+
 class CMDNLPParser:
     """Natural language parser for Windows CMD commands"""
 
     CONFIG_FILE = "cmd_nlp_config.json"
 
-    def __init__(self, log_file: str = "logs/command_history.jsonl", dry_run: bool = False, no_emoji: bool = False, config_file: Optional[str] = None, history_file: str = ".nlp_history"):
+    def __init__(self, log_file: str = "logs/command_history.jsonl", dry_run: bool = False, no_emoji: bool = False, config_file: Optional[str] = None, history_file: str = ".nlp_history", debug: bool = False):
         self.patterns: List[CommandPattern] = []
         self.log_file = log_file
         self.dry_run = dry_run
         self.no_emoji = no_emoji
+        self.debug = debug
         self.config_file = config_file or self.CONFIG_FILE
         self.history_file = history_file
         self.custom_patterns: List[Dict[str, Any]] = []
+        self.error_handler = ErrorHandler(no_emoji=no_emoji, debug=debug)
         self._setup_patterns()
         self._load_custom_patterns()
         self._setup_logging()
@@ -466,40 +624,44 @@ class CMDNLPParser:
         Returns:
             True if command was executed, False otherwise
         """
-        command, pattern = self.parse(text)
+        try:
+            command, pattern = self.parse(text)
 
-        if not command:
-            print(self._fmt("❓", f"I don't understand: '{text}'"))
-            print("Try one of these patterns:")
-            self._show_examples()
-            return False
+            if not command:
+                raise ParseError(f"Could not understand: '{text}'", 
+                                 suggestion="Try 'list files' or 'show disk space'")
 
-        print(f"\n{self._fmt('📝', f'Input: {text}')}")
-        print(self._fmt("🎯", f"Intent: {pattern.description}"))
-        print(self._fmt("⚡", f"Command: {command}"))
+            print(f"\n{self._fmt('📝', f'Input: {text}')}")
+            print(self._fmt("🎯", f"Intent: {pattern.description}"))
+            print(self._fmt("⚡", f"Command: {command}"))
 
-        # Check if safe
-        if not pattern.safe and not auto_confirm:
-            print(f"\n{self._fmt('⚠️', 'This is a destructive command!')}")
-            confirm = input("Execute? (y/n): ").strip().lower()
-            if confirm != "y":
-                print(self._fmt("❌", "Cancelled"))
+            # Check if safe
+            if not pattern.safe and not auto_confirm:
+                print(f"\n{self._fmt('⚠️', 'This is a destructive command!')}")
+                confirm = input("Execute? (y/n): ").strip().lower()
+                if confirm != "y":
+                    print(self._fmt("❌", "Cancelled"))
+                    self.log_command(text, command, pattern, executed=False)
+                    return False
+
+            # Execute or dry run
+            if self.dry_run:
+                print(self._fmt("🔍", "Dry run: Command not executed"))
                 self.log_command(text, command, pattern, executed=False)
-                return False
+                return True
 
-        # Execute or dry run
-        if self.dry_run:
-            print(self._fmt("🔍", "Dry run: Command not executed"))
-            self.log_command(text, command, pattern, executed=False)
-            return True
-
-        print(self._fmt("✅", "Executing..."))
-        
-        # Actually execute the command on Windows
-        executed = self._run_command(command)
-        if executed:
-            print(self._fmt("✨", "Done!"))
-        return executed
+            print(self._fmt("✅", "Executing..."))
+            
+            # Actually execute the command on Windows
+            executed = self._run_command(command)
+            if executed:
+                print(self._fmt("✨", "Done!"))
+            return executed
+            
+        except Exception as e:
+            error_msg = self.error_handler.handle(e, context=text)
+            print(error_msg)
+            return False
 
     def _run_command(self, command: str) -> bool:
         """
@@ -737,10 +899,11 @@ def main():
     parser.add_argument("--patterns", action="store_true", help="Show all available patterns")
     parser.add_argument("--config", help="Path to custom patterns config file (JSON)")
     parser.add_argument("--complete", action="store_true", help="Output completion keywords for shell integration")
+    parser.add_argument("--debug", action="store_true", help="Show full error tracebacks for debugging")
 
     args = parser.parse_args()
 
-    cmd_nlp = CMDNLPParser(dry_run=args.dry_run, no_emoji=args.no_emoji, config_file=args.config)
+    cmd_nlp = CMDNLPParser(dry_run=args.dry_run, no_emoji=args.no_emoji, config_file=args.config, debug=args.debug)
 
     if args.complete:
         # Output completion keywords for shell integration

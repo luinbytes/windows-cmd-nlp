@@ -134,6 +134,43 @@ To remove DOSKEY aliases:
 setup_doskey_uninstall.bat
 ```
 
+## Interactive Mode with History
+
+Run in interactive mode for a shell-like experience with command history:
+
+```cmd
+nlp --interactive
+```
+
+Features:
+- **Up/Down arrows**: Recall previous commands
+- **History persistence**: Commands saved to `.nlp_history`
+- **Search**: Type part of a command, press UP to find matches
+
+```
+🤖 Windows CMD NLP Parser (Interactive Mode)
+Type 'exit' or 'quit' to leave
+Use UP/DOWN arrows to recall previous commands
+
+❓ What would you like to do? list files
+  → dir
+
+❓ What would you like to do? go to downloads
+  → cd Downloads
+
+❓ What would you like to do? [press UP twice]
+  → list files (recalled from history)
+```
+
+### Installation
+
+Install prompt_toolkit for the best experience:
+```cmd
+pip install prompt_toolkit
+```
+
+Without prompt_toolkit, interactive mode works but without history/recall.
+
 ## Advanced Usage
 
 ### Dry Run Mode

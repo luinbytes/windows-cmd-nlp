@@ -12,6 +12,14 @@ import sys
 from datetime import datetime, timezone
 from typing import Optional, Tuple, List, Dict, Callable, Any
 
+# Try to import prompt_toolkit for interactive history support
+try:
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.history import FileHistory
+    PROMPT_TOOLKIT_AVAILABLE = True
+except ImportError:
+    PROMPT_TOOLKIT_AVAILABLE = False
+
 
 class CommandPattern:
     """Represents a single command pattern with regex and generator"""
@@ -32,12 +40,13 @@ class CMDNLPParser:
 
     CONFIG_FILE = "cmd_nlp_config.json"
 
-    def __init__(self, log_file: str = "logs/command_history.jsonl", dry_run: bool = False, no_emoji: bool = False, config_file: Optional[str] = None):
+    def __init__(self, log_file: str = "logs/command_history.jsonl", dry_run: bool = False, no_emoji: bool = False, config_file: Optional[str] = None, history_file: str = ".nlp_history"):
         self.patterns: List[CommandPattern] = []
         self.log_file = log_file
         self.dry_run = dry_run
         self.no_emoji = no_emoji
         self.config_file = config_file or self.CONFIG_FILE
+        self.history_file = history_file
         self.custom_patterns: List[Dict[str, Any]] = []
         self._setup_patterns()
         self._load_custom_patterns()
@@ -656,12 +665,33 @@ def main():
     if args.interactive:
         greeting = "Windows CMD NLP Parser (Interactive Mode)" if args.no_emoji else "🤖 Windows CMD NLP Parser (Interactive Mode)"
         print(greeting)
-        print("Type 'exit' or 'quit' to leave\n")
+        print("Type 'exit' or 'quit' to leave")
+        if PROMPT_TOOLKIT_AVAILABLE:
+            print("Use UP/DOWN arrows to recall previous commands\n")
+        else:
+            print("(Install prompt_toolkit for command history: pip install prompt_toolkit)\n")
+
+        # Set up prompt_toolkit session with history if available
+        session = None
+        if PROMPT_TOOLKIT_AVAILABLE:
+            try:
+                session = PromptSession(
+                    history=FileHistory(cmd_nlp.history_file),
+                    enable_history_search=True
+                )
+            except Exception as e:
+                print(f"Warning: Could not load history: {e}")
 
         while True:
             try:
-                prompt = "What would you like to do? " if args.no_emoji else "❓ What would you like to do? "
-                text = input(prompt).strip()
+                prompt_text = "What would you like to do? " if args.no_emoji else "❓ What would you like to do? "
+                
+                # Use prompt_toolkit if available, fall back to input()
+                if session:
+                    text = session.prompt(prompt_text).strip()
+                else:
+                    text = input(prompt_text).strip()
+                
                 if text.lower() in ["exit", "quit"]:
                     goodbye = "Goodbye!" if args.no_emoji else "👋 Goodbye!"
                     print(goodbye)

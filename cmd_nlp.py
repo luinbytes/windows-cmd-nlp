@@ -12,10 +12,12 @@ import sys
 from datetime import datetime, timezone
 from typing import Optional, Tuple, List, Dict, Callable, Any
 
-# Try to import prompt_toolkit for interactive history support
+# Try to import prompt_toolkit for interactive history and completion support
 try:
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
+    from prompt_toolkit.document import Document
     PROMPT_TOOLKIT_AVAILABLE = True
 except ImportError:
     PROMPT_TOOLKIT_AVAILABLE = False
@@ -621,6 +623,91 @@ class CMDNLPParser:
             categories[pattern.category].append(pattern)
         return categories
 
+    def get_completion_keywords(self) -> List[str]:
+        """Extract all keywords from pattern descriptions for tab completion"""
+        keywords = set()
+        
+        # Common action words
+        action_words = [
+            "go", "to", "back", "show", "current", "directory", "path", "where", "am", "i",
+            "list", "files", "sorted", "sort", "by", "size", "name", "date", "create",
+            "folder", "directory", "delete", "the", "file", "copy", "into", "move",
+            "open", "clear", "clean", "disk", "space", "ip", "address", "my", "date",
+            "time", "find", "named", "containing", "with", "text", "in", "within",
+            "running", "process", "processes", "kill", "set", "variable", "equal",
+            "ping", "trace", "route", "hidden", "attributes", "props", "properties",
+            "hide", "read", "display", "cat", "edit", "ls", "pwd", "mkdir", "rm"
+        ]
+        keywords.update(action_words)
+        
+        # Extract words from pattern descriptions
+        for pattern in self.patterns:
+            # Split description into words and add unique ones
+            words = pattern.description.lower().split()
+            for word in words:
+                # Remove punctuation
+                word = word.strip(".,!?():;")
+                if word and len(word) > 2:
+                    keywords.add(word)
+            
+            # Also extract from regex pattern (remove regex syntax)
+            import re as regex_module
+            pattern_text = pattern.pattern.pattern
+            # Remove regex special chars and extract words
+            clean_pattern = regex_module.sub(r'[?.*+^$()\[\]{}|\\]', ' ', pattern_text)
+            words = clean_pattern.lower().split()
+            for word in words:
+                word = word.strip(".,!?():;")
+                if word and len(word) > 2 and not word.startswith('<'):
+                    keywords.add(word)
+        
+        return sorted(list(keywords))
+
+    def create_completer(self) -> Optional[Any]:
+        """Create a tab completer for interactive mode"""
+        if not PROMPT_TOOLKIT_AVAILABLE:
+            return None
+        
+        keywords = self.get_completion_keywords()
+        
+        # Create a fuzzy completer for better matching
+        word_completer = WordCompleter(
+            keywords,
+            ignore_case=True,
+            match_middle=True,
+            sentence=True,
+            meta_dict=self._get_completion_metadata()
+        )
+        
+        return FuzzyCompleter(word_completer)
+    
+    def _get_completion_metadata(self) -> Dict[str, str]:
+        """Get metadata for completion items (shown in popup)"""
+        metadata = {}
+        
+        # Map common keywords to helpful descriptions
+        keyword_patterns = {
+            "go": "Navigate to directory",
+            "back": "Go to parent directory",
+            "list": "List files or directories",
+            "files": "Work with files",
+            "sorted": "Sort results by criteria",
+            "create": "Create new item",
+            "folder": "Directory operations",
+            "delete": "Remove files or folders",
+            "copy": "Copy files",
+            "move": "Move files",
+            "show": "Display information",
+            "find": "Search for files or text",
+            "kill": "Terminate processes",
+            "set": "Configure variables",
+            "ping": "Network connectivity test",
+            "hide": "Hide files",
+            "edit": "Open file in editor",
+        }
+        
+        return keyword_patterns
+
     def show_patterns(self) -> None:
         """Display all available patterns organized by category"""
         categories = self.get_patterns_by_category()
@@ -649,10 +736,17 @@ def main():
     parser.add_argument("--no-emoji", action="store_true", help="Disable emoji output")
     parser.add_argument("--patterns", action="store_true", help="Show all available patterns")
     parser.add_argument("--config", help="Path to custom patterns config file (JSON)")
+    parser.add_argument("--complete", action="store_true", help="Output completion keywords for shell integration")
 
     args = parser.parse_args()
 
     cmd_nlp = CMDNLPParser(dry_run=args.dry_run, no_emoji=args.no_emoji, config_file=args.config)
+
+    if args.complete:
+        # Output completion keywords for shell integration
+        keywords = cmd_nlp.get_completion_keywords()
+        print(" ".join(keywords))
+        return
 
     if args.stats:
         cmd_nlp.show_stats()
@@ -667,17 +761,21 @@ def main():
         print(greeting)
         print("Type 'exit' or 'quit' to leave")
         if PROMPT_TOOLKIT_AVAILABLE:
-            print("Use UP/DOWN arrows to recall previous commands\n")
+            print("Use UP/DOWN arrows for history, TAB for completion\n")
         else:
             print("(Install prompt_toolkit for command history: pip install prompt_toolkit)\n")
 
-        # Set up prompt_toolkit session with history if available
+        # Set up prompt_toolkit session with history and completion if available
         session = None
         if PROMPT_TOOLKIT_AVAILABLE:
             try:
+                completer = cmd_nlp.create_completer()
                 session = PromptSession(
                     history=FileHistory(cmd_nlp.history_file),
-                    enable_history_search=True
+                    enable_history_search=True,
+                    completer=completer,
+                    complete_while_typing=True,
+                    complete_in_thread=True
                 )
             except Exception as e:
                 print(f"Warning: Could not load history: {e}")

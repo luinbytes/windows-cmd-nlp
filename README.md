@@ -19,6 +19,20 @@ nlp list files
 nlp show ip address
 ```
 
+### 3. Optional: DOSKEY Aliases (No 'nlp' Prefix!)
+
+Run `setup_doskey.bat` as Administrator to enable natural language without typing 'nlp':
+
+```cmd
+ls              # Same as: nlp list files
+go downloads    # Same as: nlp go to downloads
+find *.txt      # Same as: nlp find files *.txt
+create folder x # Same as: nlp create folder x
+show ip         # Same as: nlp show ip address
+```
+
+**Available aliases:** `ls`, `ll`, `go`, `back`, `find`, `create`, `make`, `delete`, `show`, `open`, `status`, `commit`, and more!
+
 ## Installation Options
 
 ### Option A: Automatic (Recommended)
@@ -77,7 +91,85 @@ Execute CMD command
 - `nlp.bat` — Command wrapper (what you type)
 - `cmd_nlp.py` — NLP parser engine
 - `install.bat` — PATH installer
+- `setup_doskey.bat` — DOSKEY alias installer
+- `setup_doskey_uninstall.bat` — Remove DOSKEY aliases
+- `doskey_macros.bat` — Alias definitions
 - `patterns/` — Pattern definitions
+
+## DOSKEY Aliases
+
+Want to type even less? DOSKEY aliases let you skip the `nlp` prefix entirely!
+
+### Setup
+
+Run as Administrator:
+```cmd
+setup_doskey.bat
+```
+
+Close and reopen CMD. Now you can type:
+
+| Shortcut | Natural Language | CMD Command |
+|----------|-----------------|-------------|
+| `ls` | `list files` | `dir` |
+| `ll` | `list files detailed` | `dir` |
+| `go downloads` | `go to downloads` | `cd Downloads` |
+| `back` | `go back` | `cd ..` |
+| `find *.txt` | `find files *.txt` | `dir *.txt /s` |
+| `create folder x` | `create folder x` | `mkdir x` |
+| `delete file.txt` | `delete file.txt` | `del file.txt` |
+| `show ip` | `show ip address` | `ipconfig` |
+| `open notepad` | `open notepad` | `start notepad` |
+| `clear` | `clear` | `cls` |
+| `status` | `git status` | `git status` |
+
+### How It Works
+
+DOSKEY macros are loaded automatically via the Windows Registry (`AutoRun` key) every time CMD starts. The macros intercept common commands and route them through `nlp`.
+
+### Uninstall
+
+To remove DOSKEY aliases:
+```cmd
+setup_doskey_uninstall.bat
+```
+
+## Interactive Mode with History
+
+Run in interactive mode for a shell-like experience with command history:
+
+```cmd
+nlp --interactive
+```
+
+Features:
+- **Up/Down arrows**: Recall previous commands
+- **History persistence**: Commands saved to `.nlp_history`
+- **Search**: Type part of a command, press UP to find matches
+
+```
+🤖 Windows CMD NLP Parser (Interactive Mode)
+Type 'exit' or 'quit' to leave
+Use UP/DOWN arrows to recall previous commands
+
+❓ What would you like to do? list files
+  → dir
+
+❓ What would you like to do? go to downloads
+  → cd Downloads
+
+❓ What would you like to do? [press UP twice]
+  → list files (recalled from history)
+```
+
+### Installation
+
+Install prompt_toolkit for the best experience:
+```cmd
+pip install prompt_toolkit
+```
+
+Without prompt_toolkit, interactive mode works but without history/recall.
 
 ## Advanced Usage
 

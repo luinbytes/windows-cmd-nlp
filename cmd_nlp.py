@@ -12,32 +12,13 @@ import sys
 from datetime import datetime, timezone
 from typing import Optional, Tuple, List, Dict, Callable, Any
 
-# Try to import prompt_toolkit for interactive history and completion support
+# Try to import prompt_toolkit for interactive history support
 try:
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
-    from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
-    from prompt_toolkit.document import Document
     PROMPT_TOOLKIT_AVAILABLE = True
 except ImportError:
     PROMPT_TOOLKIT_AVAILABLE = False
-
-# Try to import colorama for Windows color support
-try:
-    from colorama import init as colorama_init, Fore, Style
-    colorama_init()
-    COLORAMA_AVAILABLE = True
-except ImportError:
-    COLORAMA_AVAILABLE = False
-    # Dummy classes for when colorama is not available
-    class _DummyFore:
-        def __getattr__(self, name):
-            return ""
-    class _DummyStyle:
-        def __getattr__(self, name):
-            return ""
-    Fore = _DummyFore()
-    Style = _DummyStyle()
 
 
 class CommandPattern:
@@ -54,160 +35,19 @@ class CommandPattern:
         return self.pattern.match(text)
 
 
-class NLPError(Exception):
-    """Base exception for NLP parser errors"""
-    def __init__(self, message: str, suggestion: Optional[str] = None):
-        super().__init__(message)
-        self.message = message
-        self.suggestion = suggestion
-
-
-class ParseError(NLPError):
-    """Raised when input cannot be parsed"""
-    pass
-
-
-class ExecutionError(NLPError):
-    """Raised when command execution fails"""
-    pass
-
-
-class ConfigError(NLPError):
-    """Raised when there's a configuration error"""
-    pass
-
-
-class ErrorHandler:
-    """Handles errors with Windows-friendly messages"""
-    
-    def __init__(self, no_emoji: bool = False, debug: bool = False, log_file: str = "logs/error.log"):
-        self.no_emoji = no_emoji
-        self.debug = debug
-        self.log_file = log_file
-        self._ensure_log_dir()
-    
-    def _ensure_log_dir(self):
-        """Ensure log directory exists"""
-        log_dir = os.path.dirname(self.log_file)
-        if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
-    
-    def _fmt(self, emoji: str, text: str) -> str:
-        """Format output with optional emoji"""
-        if self.no_emoji:
-            return text
-        return f"{emoji} {text}"
-    
-    def _color(self, text: str, color: str) -> str:
-        """Apply color to text if colorama is available"""
-        if not COLORAMA_AVAILABLE:
-            return text
-        color_map = {
-            "red": Fore.RED,
-            "yellow": Fore.YELLOW,
-            "green": Fore.GREEN,
-            "cyan": Fore.CYAN,
-            "white": Fore.WHITE,
-        }
-        reset = Style.RESET_ALL if COLORAMA_AVAILABLE else ""
-        return f"{color_map.get(color, '')}{text}{reset}"
-    
-    def log_error(self, error: Exception, context: Optional[str] = None):
-        """Log full error details to file"""
-        import traceback
-        timestamp = datetime.now(timezone.utc).isoformat()
-        with open(self.log_file, "a") as f:
-            f.write(f"[{timestamp}] Error: {error}\n")
-            if context:
-                f.write(f"  Context: {context}\n")
-            f.write(traceback.format_exc())
-            f.write("\n" + "="*50 + "\n")
-    
-    def handle(self, error: Exception, context: Optional[str] = None) -> str:
-        """Handle error and return user-friendly message"""
-        # Log full error
-        self.log_error(error, context)
-        
-        # In debug mode, show full traceback
-        if self.debug:
-            import traceback
-            return traceback.format_exc()
-        
-        # Return friendly message based on error type
-        if isinstance(error, ParseError):
-            return self._handle_parse_error(error)
-        elif isinstance(error, ExecutionError):
-            return self._handle_execution_error(error)
-        elif isinstance(error, ConfigError):
-            return self._handle_config_error(error)
-        elif isinstance(error, FileNotFoundError):
-            return self._handle_not_found_error(error)
-        elif isinstance(error, PermissionError):
-            return self._handle_permission_error(error)
-        else:
-            return self._handle_unknown_error(error)
-    
-    def _handle_parse_error(self, error: ParseError) -> str:
-        """Handle parsing errors"""
-        msg = self._color("I didn't understand that command.", "yellow")
-        if error.suggestion:
-            msg += f"\n{self._color('Hint:', 'cyan')} {error.suggestion}"
-        msg += f"\n{self._color('Try:', 'cyan')} nlp --patterns (to see available commands)"
-        return self._fmt("❓", msg) if not self.no_emoji else msg
-    
-    def _handle_execution_error(self, error: ExecutionError) -> str:
-        """Handle command execution errors"""
-        msg = self._color("Could not complete that command.", "red")
-        if error.message:
-            msg += f"\n  {error.message}"
-        if error.suggestion:
-            msg += f"\n{self._color('Suggestion:', 'cyan')} {error.suggestion}"
-        return self._fmt("❌", msg) if not self.no_emoji else msg
-    
-    def _handle_config_error(self, error: ConfigError) -> str:
-        """Handle configuration errors"""
-        msg = self._color("Configuration error.", "yellow")
-        msg += f"\n  {error.message}"
-        if error.suggestion:
-            msg += f"\n{self._color('Fix:', 'cyan')} {error.suggestion}"
-        return self._fmt("⚠️", msg) if not self.no_emoji else msg
-    
-    def _handle_not_found_error(self, error: FileNotFoundError) -> str:
-        """Handle file not found errors"""
-        msg = self._color("File or command not found.", "yellow")
-        msg += f"\n  {str(error)}"
-        return self._fmt("📁", msg) if not self.no_emoji else msg
-    
-    def _handle_permission_error(self, error: PermissionError) -> str:
-        """Handle permission errors"""
-        msg = self._color("Permission denied.", "red")
-        msg += f"\n  This command may require administrator privileges."
-        msg += f"\n{self._color('Try:', 'cyan')} Run Command Prompt as Administrator"
-        return self._fmt("🚫", msg) if not self.no_emoji else msg
-    
-    def _handle_unknown_error(self, error: Exception) -> str:
-        """Handle unknown errors"""
-        msg = self._color("Something went wrong.", "red")
-        if self.no_emoji:
-            return f"Error: {str(error)}\nUse --debug for more details."
-        return f"❌ {msg}\n  {str(error)}\n  Use --debug for full details."
-
-
 class CMDNLPParser:
     """Natural language parser for Windows CMD commands"""
 
     CONFIG_FILE = "cmd_nlp_config.json"
 
-    def __init__(self, log_file: str = "logs/command_history.jsonl", dry_run: bool = False, no_emoji: bool = False, config_file: Optional[str] = None, history_file: str = ".nlp_history", debug: bool = False):
+    def __init__(self, log_file: str = "logs/command_history.jsonl", dry_run: bool = False, no_emoji: bool = False, config_file: Optional[str] = None, history_file: str = ".nlp_history"):
         self.patterns: List[CommandPattern] = []
         self.log_file = log_file
         self.dry_run = dry_run
         self.no_emoji = no_emoji
-        self.debug = debug
         self.config_file = config_file or self.CONFIG_FILE
         self.history_file = history_file
         self.custom_patterns: List[Dict[str, Any]] = []
-        self.error_handler = ErrorHandler(no_emoji=no_emoji, debug=debug)
         self._setup_patterns()
         self._load_custom_patterns()
         self._setup_logging()
@@ -624,44 +464,40 @@ class CMDNLPParser:
         Returns:
             True if command was executed, False otherwise
         """
-        try:
-            command, pattern = self.parse(text)
+        command, pattern = self.parse(text)
 
-            if not command:
-                raise ParseError(f"Could not understand: '{text}'", 
-                                 suggestion="Try 'list files' or 'show disk space'")
-
-            print(f"\n{self._fmt('📝', f'Input: {text}')}")
-            print(self._fmt("🎯", f"Intent: {pattern.description}"))
-            print(self._fmt("⚡", f"Command: {command}"))
-
-            # Check if safe
-            if not pattern.safe and not auto_confirm:
-                print(f"\n{self._fmt('⚠️', 'This is a destructive command!')}")
-                confirm = input("Execute? (y/n): ").strip().lower()
-                if confirm != "y":
-                    print(self._fmt("❌", "Cancelled"))
-                    self.log_command(text, command, pattern, executed=False)
-                    return False
-
-            # Execute or dry run
-            if self.dry_run:
-                print(self._fmt("🔍", "Dry run: Command not executed"))
-                self.log_command(text, command, pattern, executed=False)
-                return True
-
-            print(self._fmt("✅", "Executing..."))
-            
-            # Actually execute the command on Windows
-            executed = self._run_command(command)
-            if executed:
-                print(self._fmt("✨", "Done!"))
-            return executed
-            
-        except Exception as e:
-            error_msg = self.error_handler.handle(e, context=text)
-            print(error_msg)
+        if not command:
+            print(self._fmt("❓", f"I don't understand: '{text}'"))
+            print("Try one of these patterns:")
+            self._show_examples()
             return False
+
+        print(f"\n{self._fmt('📝', f'Input: {text}')}")
+        print(self._fmt("🎯", f"Intent: {pattern.description}"))
+        print(self._fmt("⚡", f"Command: {command}"))
+
+        # Check if safe
+        if not pattern.safe and not auto_confirm:
+            print(f"\n{self._fmt('⚠️', 'This is a destructive command!')}")
+            confirm = input("Execute? (y/n): ").strip().lower()
+            if confirm != "y":
+                print(self._fmt("❌", "Cancelled"))
+                self.log_command(text, command, pattern, executed=False)
+                return False
+
+        # Execute or dry run
+        if self.dry_run:
+            print(self._fmt("🔍", "Dry run: Command not executed"))
+            self.log_command(text, command, pattern, executed=False)
+            return True
+
+        print(self._fmt("✅", "Executing..."))
+        
+        # Actually execute the command on Windows
+        executed = self._run_command(command)
+        if executed:
+            print(self._fmt("✨", "Done!"))
+        return executed
 
     def _run_command(self, command: str) -> bool:
         """
@@ -785,91 +621,6 @@ class CMDNLPParser:
             categories[pattern.category].append(pattern)
         return categories
 
-    def get_completion_keywords(self) -> List[str]:
-        """Extract all keywords from pattern descriptions for tab completion"""
-        keywords = set()
-        
-        # Common action words
-        action_words = [
-            "go", "to", "back", "show", "current", "directory", "path", "where", "am", "i",
-            "list", "files", "sorted", "sort", "by", "size", "name", "date", "create",
-            "folder", "directory", "delete", "the", "file", "copy", "into", "move",
-            "open", "clear", "clean", "disk", "space", "ip", "address", "my", "date",
-            "time", "find", "named", "containing", "with", "text", "in", "within",
-            "running", "process", "processes", "kill", "set", "variable", "equal",
-            "ping", "trace", "route", "hidden", "attributes", "props", "properties",
-            "hide", "read", "display", "cat", "edit", "ls", "pwd", "mkdir", "rm"
-        ]
-        keywords.update(action_words)
-        
-        # Extract words from pattern descriptions
-        for pattern in self.patterns:
-            # Split description into words and add unique ones
-            words = pattern.description.lower().split()
-            for word in words:
-                # Remove punctuation
-                word = word.strip(".,!?():;")
-                if word and len(word) > 2:
-                    keywords.add(word)
-            
-            # Also extract from regex pattern (remove regex syntax)
-            import re as regex_module
-            pattern_text = pattern.pattern.pattern
-            # Remove regex special chars and extract words
-            clean_pattern = regex_module.sub(r'[?.*+^$()\[\]{}|\\]', ' ', pattern_text)
-            words = clean_pattern.lower().split()
-            for word in words:
-                word = word.strip(".,!?():;")
-                if word and len(word) > 2 and not word.startswith('<'):
-                    keywords.add(word)
-        
-        return sorted(list(keywords))
-
-    def create_completer(self) -> Optional[Any]:
-        """Create a tab completer for interactive mode"""
-        if not PROMPT_TOOLKIT_AVAILABLE:
-            return None
-        
-        keywords = self.get_completion_keywords()
-        
-        # Create a fuzzy completer for better matching
-        word_completer = WordCompleter(
-            keywords,
-            ignore_case=True,
-            match_middle=True,
-            sentence=True,
-            meta_dict=self._get_completion_metadata()
-        )
-        
-        return FuzzyCompleter(word_completer)
-    
-    def _get_completion_metadata(self) -> Dict[str, str]:
-        """Get metadata for completion items (shown in popup)"""
-        metadata = {}
-        
-        # Map common keywords to helpful descriptions
-        keyword_patterns = {
-            "go": "Navigate to directory",
-            "back": "Go to parent directory",
-            "list": "List files or directories",
-            "files": "Work with files",
-            "sorted": "Sort results by criteria",
-            "create": "Create new item",
-            "folder": "Directory operations",
-            "delete": "Remove files or folders",
-            "copy": "Copy files",
-            "move": "Move files",
-            "show": "Display information",
-            "find": "Search for files or text",
-            "kill": "Terminate processes",
-            "set": "Configure variables",
-            "ping": "Network connectivity test",
-            "hide": "Hide files",
-            "edit": "Open file in editor",
-        }
-        
-        return keyword_patterns
-
     def show_patterns(self) -> None:
         """Display all available patterns organized by category"""
         categories = self.get_patterns_by_category()
@@ -898,18 +649,10 @@ def main():
     parser.add_argument("--no-emoji", action="store_true", help="Disable emoji output")
     parser.add_argument("--patterns", action="store_true", help="Show all available patterns")
     parser.add_argument("--config", help="Path to custom patterns config file (JSON)")
-    parser.add_argument("--complete", action="store_true", help="Output completion keywords for shell integration")
-    parser.add_argument("--debug", action="store_true", help="Show full error tracebacks for debugging")
 
     args = parser.parse_args()
 
-    cmd_nlp = CMDNLPParser(dry_run=args.dry_run, no_emoji=args.no_emoji, config_file=args.config, debug=args.debug)
-
-    if args.complete:
-        # Output completion keywords for shell integration
-        keywords = cmd_nlp.get_completion_keywords()
-        print(" ".join(keywords))
-        return
+    cmd_nlp = CMDNLPParser(dry_run=args.dry_run, no_emoji=args.no_emoji, config_file=args.config)
 
     if args.stats:
         cmd_nlp.show_stats()
@@ -924,21 +667,17 @@ def main():
         print(greeting)
         print("Type 'exit' or 'quit' to leave")
         if PROMPT_TOOLKIT_AVAILABLE:
-            print("Use UP/DOWN arrows for history, TAB for completion\n")
+            print("Use UP/DOWN arrows to recall previous commands\n")
         else:
             print("(Install prompt_toolkit for command history: pip install prompt_toolkit)\n")
 
-        # Set up prompt_toolkit session with history and completion if available
+        # Set up prompt_toolkit session with history if available
         session = None
         if PROMPT_TOOLKIT_AVAILABLE:
             try:
-                completer = cmd_nlp.create_completer()
                 session = PromptSession(
                     history=FileHistory(cmd_nlp.history_file),
-                    enable_history_search=True,
-                    completer=completer,
-                    complete_while_typing=True,
-                    complete_in_thread=True
+                    enable_history_search=True
                 )
             except Exception as e:
                 print(f"Warning: Could not load history: {e}")

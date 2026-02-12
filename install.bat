@@ -90,6 +90,17 @@ if "%TARGET%"=="USER" (
     )
 )
 
+REM Offer DOSKEY setup if running as admin
+if "%TARGET%"=="SYSTEM" (
+    echo.
+    choice /C YN /M "Set up DOSKEY aliases (type natural language without 'nlp' prefix)"
+    if !errorlevel! equ 1 (
+        echo.
+        echo [+] Running DOSKEY setup...
+        call "%INSTALL_DIR%setup_doskey.bat"
+    )
+)
+
 echo.
 echo ==========================================
 echo Installation Complete!
@@ -111,5 +122,9 @@ echo     nlp go to downloads
 echo     nlp create folder my-project
 echo     nlp list files
 echo     nlp show ip address
+echo.
+echo Optional DOSKEY Aliases:
+echo     Run setup_doskey.bat as Administrator for natural language shortcuts:
+echo         ls, go, find, create, delete, etc. (without typing 'nlp')
 echo.
 pause
